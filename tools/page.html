@@ -1,0 +1,530 @@
+<title>Marcador y Parley</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: boleto de apuesta arriba (parley del día), debajo tablero de marcadores por liga, al final historial. */
+:root{
+  --bg:#eef1ec; --surface:#ffffff; --surface-2:#f5f7f3; --line:#d5dcd3;
+  --fg:#142019; --muted:#5d6b62; --accent:#0d7a47; --accent-ink:#ffffff;
+  --odds:#a86b00; --win:#13804c; --loss:#c23b2e; --live:#d9480f; --push:#6b7280;
+  --ticket:#fffdf5; --ticket-line:#e4dcc2;
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0c1310; --surface:#141d18; --surface-2:#18231d; --line:#26332b;
+  --fg:#e5ece7; --muted:#93a399; --accent:#3cc483; --accent-ink:#06120b;
+  --odds:#f0b43c; --win:#45c985; --loss:#ff6b5c; --live:#ff8a4c; --push:#9aa3ae;
+  --ticket:#1b2219; --ticket-line:#38402f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0c1310; --surface:#141d18; --surface-2:#18231d; --line:#26332b;
+  --fg:#e5ece7; --muted:#93a399; --accent:#3cc483; --accent-ink:#06120b;
+  --odds:#f0b43c; --win:#45c985; --loss:#ff6b5c; --live:#ff8a4c; --push:#9aa3ae;
+  --ticket:#1b2219; --ticket-line:#38402f; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px;display:grid;gap:28px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:.01em}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:600}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+header.top{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:end;justify-content:space-between}
+header.top h1{font-size:clamp(34px,6vw,52px);font-weight:800;line-height:.95;text-transform:uppercase}
+header.top h1 span{color:var(--accent)}
+.status{display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--muted);margin-top:6px;flex-wrap:wrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.dot.on{background:var(--live);box-shadow:0 0 0 0 var(--live);animation:pulse 1.6s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--live) 60%,transparent)}100%{box-shadow:0 0 0 8px transparent}}
+@media (prefers-reduced-motion:reduce){.dot.on{animation:none}}
+.datenav{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 12px;cursor:pointer;font-weight:600;font-size:13px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn[disabled]{opacity:.4;cursor:default}
+input[type=date]{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 10px;font-size:13px}
+
+/* Boleto */
+.slips{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:860px){.slips{grid-template-columns:minmax(0,1fr)}}
+.ticket{background:var(--ticket);border:1px solid var(--ticket-line);border-radius:6px;position:relative;overflow:hidden}
+.ticket .head{padding:16px 20px 12px;display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap;border-bottom:2px dashed var(--ticket-line)}
+.ticket .head h2{font-size:28px;font-weight:800;text-transform:uppercase;line-height:1}
+.ticket .head .sub{font-size:12.5px;color:var(--muted);margin-top:4px}
+.ticket.secondary .head h2{font-size:22px}
+.legs{list-style:none;margin:0;padding:6px 20px}
+.leg{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px;padding:12px 0;border-bottom:1px solid var(--ticket-line)}
+.leg:last-child{border-bottom:0}
+.leg .what{font-weight:600;font-size:15px}
+.leg .meta{font-size:12px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.leg .o{font-family:var(--f-mono);font-weight:700;color:var(--odds);font-size:17px;text-align:right}
+.leg .pp{font-size:11.5px;color:var(--muted);text-align:right}
+.tally{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap;padding:14px 20px 18px;background:color-mix(in srgb,var(--ticket-line) 35%,transparent)}
+.tally .big{font-family:var(--f-display);font-weight:800;font-size:56px;line-height:.9;color:var(--odds)}
+.ticket.secondary .tally .big{font-size:40px}
+.tally .kv{display:grid;gap:2px;font-size:12.5px;color:var(--muted)}
+.tally .kv b{color:var(--fg);font-family:var(--f-mono);font-weight:700}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:3px 8px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.chip.win{color:var(--win)} .chip.loss{color:var(--loss)} .chip.live{color:var(--live)} .chip.pending{color:var(--muted)} .chip.push{color:var(--push)}
+.empty{padding:22px 20px;color:var(--muted);font-size:14px}
+.note{font-size:12px;color:var(--muted);max-width:70ch}
+
+/* Filtros */
+.bar{display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap}
+.bar h2{font-size:26px;text-transform:uppercase;font-weight:700}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.fchip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 11px;font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.fchip .c{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.fchip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.fchip[aria-pressed="true"] .c{color:inherit;opacity:.7}
+
+/* Tablero */
+.league{display:grid;gap:10px}
+.league h3{font-size:19px;font-weight:700;text-transform:uppercase;display:flex;gap:10px;align-items:baseline}
+.league h3 small{font-family:var(--f-body);font-size:12px;color:var(--muted);font-weight:500;text-transform:none}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px}
+.game{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;gap:8px;min-width:0}
+.game.is-live{border-color:color-mix(in srgb,var(--live) 55%,var(--line))}
+.game .st{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);gap:8px}
+.game .st .lv{color:var(--live);font-weight:700}
+.team{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center}
+.ab{font-family:var(--f-mono);font-size:12px;font-weight:700;background:var(--surface-2);border:1px solid var(--line);border-radius:5px;text-align:center;padding:3px 0}
+.tn{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tn small{color:var(--muted);font-weight:500;font-size:11.5px;margin-left:4px}
+.sc{font-family:var(--f-display);font-weight:800;font-size:26px;line-height:1;min-width:2ch;text-align:right;font-variant-numeric:tabular-nums}
+.team.lose .sc,.team.lose .tn{color:var(--muted)}
+.pred{border-top:1px solid var(--line);padding-top:8px;display:grid;gap:6px}
+.pbar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--surface-2)}
+.pbar i{display:block;height:100%}
+.pbar .h{background:var(--accent)} .pbar .d{background:var(--push)} .pbar .a{background:var(--odds)}
+.pline{display:flex;justify-content:space-between;gap:8px;font-size:12px;flex-wrap:wrap}
+.pline b{font-weight:600}
+.oline{font-size:11.5px;color:var(--muted);font-family:var(--f-mono)}
+.hit{font-weight:700}
+.hit.win{color:var(--win)} .hit.loss{color:var(--loss)}
+
+/* Historial */
+.histwrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:560px}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;background:var(--surface-2)}
+tr:last-child td{border-bottom:0}
+.kpis{display:flex;gap:28px;flex-wrap:wrap}
+.eff{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px;display:grid;gap:20px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+.controls{display:flex;gap:10px;flex-wrap:wrap}
+.stats{display:grid;grid-template-columns:minmax(0,1.2fr) repeat(4,minmax(0,1fr));gap:18px;align-items:end}
+@media (max-width:760px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.stats .hero{grid-column:1/-1}}
+.stat .v{font-family:var(--f-display);font-weight:800;font-size:34px;line-height:1;font-variant-numeric:tabular-nums}
+.stat.hero .v{font-size:64px}
+.stat .l{font-size:12px;color:var(--muted);margin-top:4px}
+.split{display:flex;height:10px;border-radius:5px;overflow:hidden;gap:2px;margin-top:10px;background:var(--surface)}
+.split i{display:block;height:100%}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);flex-wrap:wrap;margin-top:6px}
+.legend span{display:inline-flex;gap:6px;align-items:center}
+.sw{width:10px;height:10px;border-radius:2px;display:inline-block}
+.chartbox{position:relative;min-width:0}
+.chartbox svg{width:100%;height:auto;display:block;overflow:visible}
+.chartbox text{fill:var(--muted);font-size:11px;font-family:var(--f-body)}
+.tip{position:absolute;pointer-events:none;background:var(--fg);color:var(--bg);font-size:12px;padding:7px 9px;border-radius:6px;white-space:nowrap;transform:translate(-50%,-110%);line-height:1.35}
+.effgrid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:24px}
+@media (max-width:860px){.effgrid{grid-template-columns:minmax(0,1fr)}}
+.lgrow{display:grid;grid-template-columns:110px minmax(0,1fr) 78px;gap:10px;align-items:center;font-size:13px}
+.lgbar{height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+.lgbar i{display:block;height:100%;background:var(--accent);border-radius:0 4px 4px 0}
+.lgrow .num{text-align:right;font-size:12px}
+.kpi .v{font-family:var(--f-display);font-size:34px;font-weight:800;line-height:1}
+.kpi .l{font-size:12px;color:var(--muted)}
+footer{font-size:12px;color:var(--muted);display:grid;gap:6px;border-top:1px solid var(--line);padding-top:16px}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">NHL · NBA · NFL · Liga MX · Premier · Champions · LaLiga · Serie A · Bundesliga</div>
+      <h1>Marcador <span>&amp;</span> Parley</h1>
+      <div class="status"><span class="dot" id="dot"></span><span id="statusText">Cargando datos…</span></div>
+    </div>
+    <div class="datenav">
+      <button class="btn" id="prev" type="button" aria-label="Día anterior">‹</button>
+      <button class="btn" id="today" type="button">Hoy</button>
+      <button class="btn" id="next" type="button" aria-label="Día siguiente">›</button>
+      <input type="date" id="datePick" min="2025-01-01" max="2026-12-31" aria-label="Elegir fecha">
+    </div>
+  </header>
+
+  <section aria-labelledby="slipTitle">
+    <div class="slips">
+      <article class="ticket" id="safeSlip"></article>
+      <article class="ticket secondary" id="valueSlip"></article>
+    </div>
+  </section>
+
+  <section class="league-board" aria-labelledby="boardTitle" style="display:grid;gap:18px">
+    <div class="bar">
+      <h2 id="boardTitle">Marcadores y pronósticos</h2>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div id="board" style="display:grid;gap:22px"></div>
+  </section>
+
+  <section style="display:grid;gap:14px" aria-labelledby="effTitle">
+    <div class="bar"><h2 id="effTitle" style="font-size:26px;text-transform:uppercase;font-weight:700">Efectividad del parley</h2>
+      <div class="controls">
+        <div class="seg" id="effKind" role="group" aria-label="Tipo de parley"><button type="button" data-v="safe">Del día</button><button type="button" data-v="value">De valor</button></div>
+        <div class="seg" id="effRange" role="group" aria-label="Periodo"><button type="button" data-v="7">7 días</button><button type="button" data-v="30">30 días</button><button type="button" data-v="all">Todo</button></div>
+      </div></div>
+    <div class="eff" id="eff"></div>
+  </section>
+
+  <section style="display:grid;gap:14px" aria-labelledby="histTitle">
+    <div class="bar"><h2 id="histTitle" style="font-size:26px;text-transform:uppercase;font-weight:700">Historial del parley</h2></div>
+    <div class="histwrap"><table><thead><tr><th>Fecha</th><th>Selecciones</th><th>Momio</th><th>Prob.</th><th>Resultado</th></tr></thead><tbody id="hist"></tbody></table></div>
+  </section>
+
+  <footer>
+    <div>Marcadores y momios: ESPN y DraftKings. Horarios en hora del centro de México. Solo temporadas 2025 y 2026.</div>
+    <div>El pronóstico combina la probabilidad de los momios sin margen de la casa (85 %) con el récord de la temporada y la localía (15 %). El parley seguro busca la mayor probabilidad combinada con momio de 1.70 o más; el de valor, tres selecciones con momio de 2.50 o más. Ningún modelo garantiza resultados: apuesta solo lo que puedas perder y verifica el momio en tu casa de apuestas antes de jugar.</div>
+  </footer>
+</div>
+
+<script id="embedded" type="application/json">/*DATA*/</script>
+<script>
+/*MODEL*/
+</script>
+<script>
+(function(){
+const M = window.SportsModel, L = M.LEAGUES, TZ = "America/Mexico_City";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const isoLocal = (d) => new Intl.DateTimeFormat("en-CA",{timeZone:TZ}).format(d);
+const addDays = (iso, n) => { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0,10); };
+const clampDate = (iso) => iso < "2025-01-01" ? "2025-01-01" : iso > "2026-12-31" ? "2026-12-31" : iso;
+const hhmm = (s) => new Intl.DateTimeFormat("es-MX",{timeZone:TZ,hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(s));
+const longDate = (iso) => new Intl.DateTimeFormat("es-MX",{timeZone:"UTC",weekday:"long",day:"numeric",month:"long",year:"numeric"}).format(new Date(iso+"T12:00:00Z"));
+const shortDate = (iso) => new Intl.DateTimeFormat("es-MX",{timeZone:"UTC",weekday:"short",day:"numeric",month:"short"}).format(new Date(iso+"T12:00:00Z"));
+const pct = (p) => Math.round(p * 100) + "%";
+const ago = (s) => { const m = Math.round((Date.now() - new Date(s)) / 60000); return m < 1 ? "hace un momento" : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m/60)} h` : `hace ${Math.round(m/1440)} d`; };
+const store = { get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+
+const S = { liveGames: {}, fetching: new Set(), date: clampDate(isoLocal(new Date())), lg: store.get("lg") || "all", mode: null, day: null, history: [], db: null, unsubDay: null, timer: null };
+
+/* ---------- Normalización ESPN (modo en vivo) ---------- */
+const amer = (v) => { if (v == null) return null; const s = String(v).replace("+","").trim(); if (/^ev(en)?$/i.test(s)) return 100; const n = parseFloat(s); return isNaN(n) ? null : Math.round(n); };
+const gg = (o, ...p) => p.reduce((x,k) => x && typeof x === "object" ? x[k] : undefined, o);
+function normOdds(c){
+  const o = (c.odds || [])[0]; if (!o) return null;
+  const r = { prov: gg(o,"provider","name"),
+    mlH: amer(gg(o,"moneyline","home","close","odds")) ?? amer(gg(o,"homeTeamOdds","moneyLine")),
+    mlA: amer(gg(o,"moneyline","away","close","odds")) ?? amer(gg(o,"awayTeamOdds","moneyLine")),
+    mlD: amer(gg(o,"moneyline","draw","close","odds")) ?? amer(gg(o,"drawOdds","moneyLine")),
+    spH: parseFloat(gg(o,"pointSpread","home","close","line")), spHo: amer(gg(o,"pointSpread","home","close","odds")), spAo: amer(gg(o,"pointSpread","away","close","odds")),
+    ou: o.overUnder, ovO: amer(gg(o,"total","over","close","odds")), unO: amer(gg(o,"total","under","close","odds")) };
+  if (isNaN(r.spH)) r.spH = o.spread ?? null;
+  Object.keys(r).forEach(k => r[k] == null && delete r[k]);
+  return r;
+}
+function normTeam(t){ const rec = (t.records||[]).find(r => r.type === "total"); return { n: gg(t,"team","displayName"), ab: gg(t,"team","abbreviation"), score: t.score, rec: rec && rec.summary, form: t.form }; }
+function normEvent(lg, e){
+  const c = e.competitions[0], tm = {}; c.competitors.forEach(t => tm[t.homeAway] = t);
+  const st = e.status.type, g = { id: e.id, lg, date: e.date, state: st.state, detail: st.shortDetail || st.detail, home: normTeam(tm.home), away: normTeam(tm.away) };
+  const od = normOdds(c); if (od) g.odds = od; return g;
+}
+async function espn(path, ymd, signal){
+  const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${path}/scoreboard?dates=${ymd}&limit=300`, { signal });
+  if (!r.ok) throw new Error(r.status); return r.json();
+}
+async function liveDay(iso){
+  const days = [iso, addDays(iso,1)].map(d => d.replace(/-/g,""));
+  const jobs = [];
+  for (const [lg, meta] of Object.entries(L)) for (const d of days) jobs.push(espn(meta.path, d).then(j => (j.events||[]).map(e => normEvent(lg, e))).catch(() => []));
+  const byId = {};
+  (await Promise.all(jobs)).flat().forEach(g => { if (isoLocal(new Date(g.date)) === iso) byId[g.id] = g; });
+  return Object.values(byId).sort((a,b) => a.date.localeCompare(b.date));
+}
+
+/* ---------- Detección de modo ---------- */
+async function detectMode(){
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 5000);
+  try { await espn("basketball/nba", S.date.replace(/-/g,""), ctl.signal); return "live"; }
+  catch { return "db"; } finally { clearTimeout(t); }
+}
+
+/* ---------- Carga de datos ---------- */
+async function loadLive(){
+  clearTimeout(S.timer);
+  const iso = S.date;
+  const games = await liveDay(iso);
+  if (iso !== S.date) return;
+  const today = isoLocal(new Date());
+  const official = S.emb?.days?.[iso]?.parlay;
+  let parlay = official || store.get("parlay:" + iso);
+  if (!parlay) {
+    const pool = iso >= today ? games.filter(g => g.state === "pre") : games;
+    const p = M.buildParlays(pool);
+    if (p.safe || p.value) { parlay = { ...p, locked: iso <= today, computedAt: new Date().toISOString() }; if (iso === today) store.set("parlay:" + iso, parlay); }
+  }
+  // Conserva la lista de parleys del navegador para el historial
+  S.liveGames[iso] = games;
+  if (!S.emb && parlay && iso <= today) { const h = store.get("hist") || {}; h[iso] = { parlay, games: games.filter(g => [...(parlay.safe?.legs||[]), ...(parlay.value?.legs||[])].some(l => l.gid === g.id)) }; store.set("hist", h); }
+  buildLiveHistory();
+  resolvePending();
+  S.day = { date: iso, updated: new Date().toISOString(), games, parlay };
+  render();
+  const anyLive = games.some(g => g.state === "in");
+  S.timer = setTimeout(() => loadLive().catch(() => {}), anyLive ? 30000 : 300000);
+}
+// Historial en modo en vivo: el oficial (incrustado) o el de este navegador, con los marcadores en vivo encima
+function buildLiveHistory(){
+  const today = isoLocal(new Date());
+  const base = S.emb ? Object.values(S.emb.days) : Object.entries(store.get("hist") || {}).map(([date, v]) => ({ date, ...v }));
+  S.history = base.filter(d => d.date <= today && d.parlay).map(d => {
+    const lg = S.liveGames[d.date]; if (!lg) return d;
+    return { ...d, games: [...lg, ...(d.games||[]).filter(g => !lg.some(x => x.id === g.id))] };
+  }).sort((a,b) => b.date.localeCompare(a.date));
+}
+// Si un parley de días anteriores sigue sin calificar, consulta esos marcadores en ESPN
+async function resolvePending(){
+  const today = isoLocal(new Date()), from = addDays(today, -21);
+  for (const d of S.history) {
+    if (d.date < from || S.liveGames[d.date] || S.fetching.has(d.date)) continue;
+    const byId = Object.fromEntries((d.games||[]).map(g => [g.id, g]));
+    const open = ["safe","value"].some(k => d.parlay[k] && !["win","loss"].includes(M.evalParlay(d.parlay[k], byId).overall));
+    if (!open) continue;
+    S.fetching.add(d.date);
+    try { S.liveGames[d.date] = await liveDay(d.date); } catch { S.fetching.delete(d.date); continue; }
+    buildLiveHistory(); renderHistory();
+  }
+}
+function subscribeDay(){
+  if (S.unsubDay) S.unsubDay();
+  const iso = S.date; S.day = null; render();
+  const t = setTimeout(() => { if (!S.day) { S.day = { date: iso, games: [], missing: true, slow: true }; render(); } }, 10000);
+  S.unsubDay = S.db.doc("days/" + iso).onSnapshot(snap => {
+    clearTimeout(t);
+    S.day = snap.exists ? { ...snap.data() } : { date: iso, games: [], missing: true };
+    render();
+  }, () => { clearTimeout(t); S.day = { date: iso, games: [], missing: true, error: true }; render(); });
+}
+function subscribeHistory(){
+  S.db.collection("days").orderBy("date","desc").limit(120).onSnapshot(q => {
+    const today = isoLocal(new Date());
+    S.history = q.docs.map(d => d.data()).filter(d => d.date <= today && d.parlay);
+    renderHistory();
+  }, () => {});
+}
+function load(){
+  if (S.mode === "live") loadLive().catch(() => { S.day = { date: S.date, games: [], missing: true, error: true }; render(); });
+  else if (S.mode === "embedded") { S.day = S.emb.days[S.date] || { date: S.date, games: [], missing: true }; render(); }
+  else if (S.db) subscribeDay();
+}
+
+/* ---------- Render ---------- */
+function statusOf(o){ return o === "win" ? ["win","Ganada"] : o === "loss" ? ["loss","Perdida"] : o === "push" ? ["push","Empate (push)"] : o && o.startsWith("live") ? ["live","En juego · va " + (o.endsWith("win") ? "ganando" : o.endsWith("loss") ? "perdiendo" : "empatada")] : ["pending","Pendiente"]; }
+function slip(el, p, kind, gamesById){
+  const title = kind === "safe" ? "Parley del día" : "Parley de valor";
+  const sub = kind === "safe" ? "Mayor probabilidad con momio mínimo de 1.70" : "Tres selecciones, momio de 2.50 o más";
+  if (!p) {
+    const why = !S.day ? "Cargando partidos…" : S.day.missing ? "Todavía no hay datos guardados para esta fecha." : (S.day.games||[]).length === 0 ? "No hay partidos de estas ligas en esta fecha." : "No hay suficientes partidos con momio disponible para armarlo.";
+    el.innerHTML = `<div class="head"><div><div class="eyebrow">${esc(shortDate(S.date))}</div><h2>${title}</h2><div class="sub">${sub}</div></div></div><div class="empty">${why}</div>`;
+    return;
+  }
+  const ev = M.evalParlay(p, gamesById); const [cls, txt] = statusOf(ev.overall);
+  const legs = p.legs.map((l, i) => { const [c, t] = statusOf(ev.res[i]); const g = gamesById[l.gid];
+    const score = g && g.state !== "pre" ? ` · ${esc(g.away.ab)} ${esc(g.away.score)}–${esc(g.home.score)} ${esc(g.home.ab)}` : "";
+    return `<li class="leg"><div><div class="what">${esc(l.label)}</div><div class="meta"><span>${esc(L[l.lg]?.name || l.lg)}</span><span>${esc(l.match)} · ${hhmm(l.start)}${score}</span><span class="chip ${c}">${t}</span></div></div><div><div class="o">${l.dec.toFixed(2)}</div><div class="pp">${pct(l.p)} prob.</div></div></li>`; }).join("");
+  const am = M.toAmerican(p.dec);
+  el.innerHTML = `<div class="head"><div><div class="eyebrow">${esc(shortDate(S.date))}${S.day?.parlay && !S.day.parlay.locked ? " · provisional" : ""}</div><h2>${title}</h2><div class="sub">${sub}</div></div><span class="chip ${cls}">${txt}</span></div>
+  <ul class="legs">${legs}</ul>
+  <div class="tally"><div><div class="eyebrow">Momio combinado</div><div class="big num">${p.dec.toFixed(2)}</div></div>
+  <div class="kv"><span>Americano <b>${am}</b></span><span>Probabilidad estimada <b>${pct(p.p)}</b></span><span>Con $100 cobras <b>$${Math.round(p.dec*100)}</b></span></div></div>`;
+}
+function gameCard(g){
+  const pr = M.predict(g), o = g.odds || {}, meta = L[g.lg];
+  const live = g.state === "in", fin = g.state === "post";
+  const h = +g.home.score, a = +g.away.score;
+  const st = live ? `<span class="lv">● ${esc(g.detail)}</span>` : fin ? `<span>${esc(g.detail || "Final")}</span>` : `<span>${hhmm(g.date)} h</span>`;
+  const row = (t, side) => { const lose = fin && ((side === "H" && h < a) || (side === "A" && a < h));
+    return `<div class="team ${lose ? "lose" : ""}"><span class="ab">${esc(t.ab)}</span><span class="tn">${esc(t.n)}<small>${esc(t.rec || "")}</small></span><span class="sc">${g.state === "pre" ? "" : esc(t.score)}</span></div>`; };
+  const pickName = pr.pick === "H" ? g.home.ab : pr.pick === "A" ? g.away.ab : "Empate";
+  let hit = "";
+  if (fin) { const res = h > a ? "H" : a > h ? "A" : "D"; hit = res === pr.pick ? `<span class="hit win">Acertado</span>` : `<span class="hit loss">Fallado</span>`; }
+  const odds = [];
+  if (o.mlH != null) odds.push(`ML ${g.home.ab} ${M.dec(o.mlH).toFixed(2)} · ${g.away.ab} ${M.dec(o.mlA).toFixed(2)}${o.mlD != null ? " · X " + M.dec(o.mlD).toFixed(2) : ""}`);
+  if (o.ou != null) odds.push(`O/U ${o.ou}`);
+  if (o.spH != null && meta?.sport !== "soccer") odds.push(`Hcp ${g.home.ab} ${o.spH > 0 ? "+" : ""}${o.spH}`);
+  return `<div class="game ${live ? "is-live" : ""}"><div class="st">${st}<span>${esc(meta?.name || "")}</span></div>
+    ${row(g.away,"A")}${row(g.home,"H")}
+    <div class="pred"><div class="pbar" aria-hidden="true"><i class="a" style="width:${pr.probs.A*100}%"></i><i class="d" style="width:${pr.probs.D*100}%"></i><i class="h" style="width:${pr.probs.H*100}%"></i></div>
+    <div class="pline"><span>${esc(g.away.ab)} ${pct(pr.probs.A)}${pr.probs.D ? " · Empate " + pct(pr.probs.D) : ""} · ${esc(g.home.ab)} ${pct(pr.probs.H)}</span><span>Pronóstico: <b>${esc(pickName)}</b> ${hit}</span></div>
+    <div class="oline">${odds.length ? esc(odds.join("  ·  ")) : "Sin momio · base: " + esc(pr.source)}</div></div></div>`;
+}
+function render(){
+  $("datePick").value = S.date;
+  $("prev").disabled = S.date <= "2025-01-01"; $("next").disabled = S.date >= "2026-12-31";
+  const games = S.day?.games || [];
+  const byId = Object.fromEntries(games.map(g => [g.id, g]));
+  slip($("safeSlip"), S.day?.parlay?.safe, "safe", byId);
+  slip($("valueSlip"), S.day?.parlay?.value, "value", byId);
+  // Estado
+  const anyLive = games.some(g => g.state === "in");
+  $("dot").className = "dot" + (anyLive ? " on" : "");
+  let txt = longDate(S.date);
+  if (S.mode === "live") txt += " · en vivo desde ESPN, se refresca " + (anyLive ? "cada 30 s" : "cada 5 min");
+  else if ((S.mode === "db" || S.mode === "embedded") && S.day?.updated) txt += " · actualizado " + ago(S.day.updated) + " (se actualiza solo varias veces al día)";
+  else if (S.mode === "nodata") txt += " · abre esta página en claude.ai o descarga la versión en vivo";
+  if (S.day?.slow) txt += " · los datos tardan en llegar, pueden estar desactualizados";
+  $("statusText").textContent = txt;
+  // Filtros
+  const counts = {}; games.forEach(g => counts[g.lg] = (counts[g.lg]||0) + 1);
+  const opts = [["all","Todas",games.length], ...Object.keys(L).map(k => [k, L[k].name, counts[k]||0])];
+  $("chips").innerHTML = opts.map(([k,n,c]) => `<button type="button" class="fchip" data-lg="${k}" aria-pressed="${S.lg===k}">${esc(n)} <span class="c">${c}</span></button>`).join("");
+  // Tablero
+  const shown = games.filter(g => S.lg === "all" || g.lg === S.lg);
+  if (!S.day) $("board").innerHTML = `<div class="empty">Cargando partidos…</div>`;
+  else if (!shown.length) $("board").innerHTML = `<div class="empty">${S.day.missing ? "Aún no hay datos guardados para esta fecha. Se llenan solos con cada actualización (de ayer a dos días adelante)." : "No hay partidos de esta liga en esta fecha."}</div>`;
+  else {
+    const groups = {}; shown.forEach(g => (groups[g.lg] ||= []).push(g));
+    $("board").innerHTML = Object.keys(L).filter(k => groups[k]).map(k => {
+      const gs = groups[k], lv = gs.filter(g => g.state === "in").length;
+      return `<div class="league"><h3>${esc(L[k].name)} <small>${gs.length} partido${gs.length>1?"s":""}${lv ? ` · ${lv} en vivo` : ""}</small></h3><div class="grid">${gs.map(gameCard).join("")}</div></div>`;
+    }).join("");
+  }
+  renderHistory();
+}
+function renderHistory(){
+  const rows = []; let n = 0, w = 0, units = 0;
+  for (const d of S.history) {
+    const p = d.parlay?.safe; if (!p) continue;
+    const byId = Object.fromEntries((d.games||[]).map(g => [g.id, g]));
+    const ev = M.evalParlay(p, byId); const [cls, txt] = statusOf(ev.overall);
+    if (ev.overall === "win" || ev.overall === "loss") { n++; if (ev.overall === "win") { w++; units += p.dec - 1; } else units -= 1; }
+    rows.push(`<tr><td>${esc(shortDate(d.date))}</td><td>${p.legs.map(l => esc(l.label) + ` <span class="num" style="color:var(--odds)">${l.dec.toFixed(2)}</span>`).join("<br>")}</td><td class="num">${p.dec.toFixed(2)}</td><td class="num">${pct(p.p)}</td><td><span class="chip ${cls}">${txt}</span></td></tr>`);
+  }
+  renderEff();
+  $("hist").innerHTML = rows.join("") || `<tr><td colspan="5" class="empty">${S.mode === "live" ? "Aquí se guardan los parleys que veas en este navegador." : "El historial se llena con cada día que pase."}</td></tr>`;
+}
+
+/* ---------- Efectividad ---------- */
+S.effKind = store.get("effKind") || "safe"; S.effRange = store.get("effRange") || "30";
+function effData(){
+  const today = isoLocal(new Date());
+  const from = S.effRange === "all" ? "0000" : addDays(today, -(+S.effRange - 1));
+  const list = S.history.filter(d => d.date >= from && d.date <= today && d.parlay?.[S.effKind]).sort((a,b) => a.date.localeCompare(b.date));
+  const days = [], leagues = {}; let w = 0, l = 0, units = 0, oddsSum = 0, legW = 0, legN = 0, pending = 0;
+  for (const d of list) {
+    const p = d.parlay[S.effKind], byId = Object.fromEntries((d.games||[]).map(g => [g.id, g]));
+    const ev = M.evalParlay(p, byId);
+    p.legs.forEach((leg, i) => { const r = ev.res[i]; if (r !== "win" && r !== "loss") return;
+      const t = (leagues[leg.lg] ||= { w: 0, n: 0 }); t.n++; legN++; if (r === "win") { t.w++; legW++; } });
+    if (ev.overall !== "win" && ev.overall !== "loss") { pending++; continue; }
+    const won = ev.overall === "win"; won ? w++ : l++; units += won ? p.dec - 1 : -1; oddsSum += p.dec;
+    days.push({ date: d.date, won, dec: p.dec, rate: w / (w + l), legs: p.legs.map(x => x.label) });
+  }
+  let streak = 0; for (let i = days.length - 1; i >= 0 && days[i].won === days[days.length-1].won; i--) streak++;
+  let best = 0, run = 0; days.forEach(x => { run = x.won ? run + 1 : 0; best = Math.max(best, run); });
+  const n = w + l;
+  return { days, w, l, n, units, avgOdds: n ? oddsSum / n : null, streak, streakWon: days.length ? days[days.length-1].won : null, best, legW, legN, leagues, pending };
+}
+function renderEff(){
+  document.querySelectorAll("#effKind button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === S.effKind));
+  document.querySelectorAll("#effRange button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === S.effRange));
+  const D = effData(), el = $("eff");
+  const kindName = S.effKind === "safe" ? "parley del día" : "parley de valor";
+  if (!D.n) {
+    el.innerHTML = `<div class="empty" style="padding:6px 0">Todavía no hay ningún ${kindName} terminado en este periodo${D.pending ? ` (${D.pending} pendiente${D.pending>1?"s":""})` : ""}. Cada día que se resuelva el parley se suma aquí: porcentaje de aciertos y fallos, racha, unidades ganadas y aciertos por liga.</div>`;
+    return;
+  }
+  const be = D.avgOdds ? 1 / D.avgOdds : null;
+  const streakTxt = D.streakWon ? `${D.streak} ✓` : `${D.streak} ✗`;
+  el.innerHTML = `
+  <div class="stats">
+    <div class="stat hero"><div class="eyebrow">Aciertos</div><div class="v" style="color:var(--win)">${pct(D.w/D.n)}</div>
+      <div class="split" role="img" aria-label="${D.w} acertados y ${D.l} fallados"><i style="width:${D.w/D.n*100}%;background:var(--win)"></i><i style="width:${D.l/D.n*100}%;background:var(--loss)"></i></div>
+      <div class="legend"><span><i class="sw" style="background:var(--win)"></i>✓ Acertados ${D.w}</span><span><i class="sw" style="background:var(--loss)"></i>✗ Fallados ${D.l} (${pct(D.l/D.n)})</span>${D.pending ? `<span>Pendientes ${D.pending}</span>` : ""}</div></div>
+    <div class="stat"><div class="v">${D.w}/${D.n}</div><div class="l">parleys acertados</div></div>
+    <div class="stat"><div class="v" style="color:${D.streakWon ? "var(--win)" : "var(--loss)"}">${streakTxt}</div><div class="l">racha actual · mejor ${D.best} ✓</div></div>
+    <div class="stat"><div class="v" style="color:${D.units >= 0 ? "var(--win)" : "var(--loss)"}">${D.units >= 0 ? "+" : ""}${D.units.toFixed(2)}</div><div class="l">unidades (1 por parley)</div></div>
+    <div class="stat"><div class="v">${D.legN ? pct(D.legW/D.legN) : "—"}</div><div class="l">selecciones acertadas (${D.legW}/${D.legN})</div></div>
+  </div>
+  <div class="effgrid">
+    <div style="display:grid;gap:6px;min-width:0"><div class="eyebrow">% de aciertos acumulado, día por día</div>
+      <div class="chartbox" id="effChart"></div>
+      <div class="legend"><span><i class="sw" style="background:var(--accent)"></i>% de aciertos acumulado</span>${be ? `<span><i class="sw" style="background:var(--muted);height:2px"></i>Punto de equilibrio ${pct(be)} (momio promedio ${D.avgOdds.toFixed(2)})</span>` : ""}<span>✓ / ✗ resultado de cada día</span></div></div>
+    <div style="display:grid;gap:10px;align-content:start"><div class="eyebrow">Selecciones acertadas por liga</div>
+      ${Object.entries(D.leagues).sort((a,b) => b[1].n - a[1].n).map(([k,t]) => `<div class="lgrow"><span>${esc(L[k]?.name || k)}</span><div class="lgbar"><i style="width:${t.w/t.n*100}%"></i></div><span class="num">${t.w}/${t.n} · ${pct(t.w/t.n)}</span></div>`).join("")}
+    </div>
+  </div>`;
+  drawEffChart(D, be);
+}
+function drawEffChart(D, be){
+  const box = $("effChart"), W = Math.max(300, Math.round(box.clientWidth || 640)), H = 230, pl = 38, pr = 12, pt = 12, pb = 46;
+  const n = D.days.length, x = (i) => pl + (n === 1 ? (W - pl - pr) / 2 : i * (W - pl - pr) / (n - 1)), y = (v) => pt + (1 - v) * (H - pt - pb);
+  let g = "";
+  [0, .25, .5, .75, 1].forEach(v => { g += `<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${pl-6}" y="${y(v)+4}" text-anchor="end">${v*100}%</text>`; });
+  if (be) g += `<line x1="${pl}" x2="${W-pr}" y1="${y(be)}" y2="${y(be)}" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+  const pts = D.days.map((d,i) => [x(i), y(d.rate)]);
+  if (n > 1) g += `<path d="M${pts.map(p => p.join(",")).join("L")}L${pts[n-1][0]},${y(0)}L${pts[0][0]},${y(0)}Z" fill="var(--accent)" fill-opacity=".10"/><path d="M${pts.map(p => p.join(",")).join("L")}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/>`;
+  const step = Math.max(1, Math.ceil(n / Math.max(2, Math.floor((W - pl - pr) / 74)))), cell = Math.min(16, Math.max(6, (W - pl - pr) / Math.max(n,1) - 2));
+  D.days.forEach((d,i) => {
+    const cx = x(i);
+    g += `<rect x="${cx-cell/2}" y="${H-pb+10}" width="${cell}" height="${cell}" rx="3" fill="${d.won ? "var(--win)" : "var(--loss)"}"/>`;
+    if (cell >= 12) g += `<text x="${cx}" y="${H-pb+10+cell-4}" text-anchor="middle" style="fill:var(--surface);font-size:10px;font-weight:700">${d.won ? "✓" : "✗"}</text>`;
+    if (i % step === 0 || i === n - 1) g += `<text x="${cx}" y="${H-6}" text-anchor="middle">${esc(shortDate(d.date).replace(/^\S+\s/, ""))}</text>`;
+  });
+  const last = pts[n-1];
+  g += `<circle cx="${last[0]}" cy="${last[1]}" r="5" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>`;
+  g += `<g id="effHover" style="display:none"><line id="effHl" y1="${pt}" y2="${H-pb}" stroke="var(--muted)" stroke-width="1"/><circle id="effHc" r="5" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/></g>`;
+  g += `<rect x="${pl}" y="0" width="${W-pl-pr}" height="${H}" fill="transparent" id="effHit"/>`;
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Porcentaje de aciertos acumulado: ${pct(D.days[n-1].rate)} tras ${n} parleys">${g}</svg><div class="tip" hidden id="effTip"></div>`;
+  const svg = box.querySelector("svg"), tip = $("effTip"), hov = $("effHover");
+  const move = (ev) => {
+    const r = svg.getBoundingClientRect(), sx = (ev.clientX - r.left) * W / r.width;
+    let i = 0, best = Infinity; pts.forEach((p,k) => { const dd = Math.abs(p[0] - sx); if (dd < best) { best = dd; i = k; } });
+    const d = D.days[i], [px, py] = pts[i];
+    hov.style.display = ""; $("effHl").setAttribute("x1", px); $("effHl").setAttribute("x2", px); $("effHc").setAttribute("cx", px); $("effHc").setAttribute("cy", py);
+    tip.hidden = false; tip.style.left = (px / W * r.width) + "px"; tip.style.top = (py / H * r.height) + "px";
+    tip.innerHTML = `<b>${esc(shortDate(d.date))}</b> · ${d.won ? "✓ Acertado" : "✗ Fallado"} · momio ${d.dec.toFixed(2)}<br>${d.legs.map(esc).join(" + ")}<br>Acumulado: ${pct(d.rate)} de aciertos`;
+  };
+  $("effHit").addEventListener("pointermove", move); $("effHit").addEventListener("pointerdown", move);
+  $("effHit").addEventListener("pointerleave", () => { tip.hidden = true; hov.style.display = "none"; });
+}
+let effRW = 0; window.addEventListener("resize", () => { const w = $("effChart")?.clientWidth; if (w && Math.abs(w - effRW) > 20) { effRW = w; renderEff(); } });
+$("effKind").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; S.effKind = b.dataset.v; store.set("effKind", S.effKind); renderEff(); };
+$("effRange").onclick = (e) => { const b = e.target.closest("[data-v]"); if (!b) return; S.effRange = b.dataset.v; store.set("effRange", S.effRange); renderEff(); };
+
+/* ---------- Controles ---------- */
+const go = (iso) => { S.date = clampDate(iso); load(); render(); };
+$("prev").onclick = () => go(addDays(S.date,-1));
+$("next").onclick = () => go(addDays(S.date,1));
+$("today").onclick = () => go(isoLocal(new Date()));
+$("datePick").onchange = (e) => e.target.value && go(e.target.value);
+$("chips").onclick = (e) => { const b = e.target.closest("[data-lg]"); if (!b) return; S.lg = b.dataset.lg; store.set("lg", S.lg); render(); };
+
+/* ---------- Arranque ---------- */
+render();
+(async () => {
+  S.mode = await detectMode();
+  let emb = null; try { emb = JSON.parse(document.getElementById("embedded").textContent); } catch {}
+  if (emb && emb.days && Object.keys(emb.days).length) S.emb = emb; else emb = null;
+  if (S.mode === "db") {
+    if (emb) {
+      S.mode = "embedded"; S.emb = emb;
+      const today = isoLocal(new Date());
+      S.history = Object.values(emb.days).filter(d => d.date <= today && d.parlay).sort((a,b) => b.date.localeCompare(a.date));
+      load(); return;
+    }
+    const db = window.claude?.use ? await window.claude.use("db") : null;
+    if (!db) { S.mode = "nodata"; S.day = { date: S.date, games: [], missing: true }; render(); return; }
+    S.db = db; subscribeHistory();
+  }
+  load();
+})();
+})();
+</script>

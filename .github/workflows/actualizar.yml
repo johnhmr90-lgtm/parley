@@ -1,0 +1,33 @@
+name: Actualizar marcadores y parley
+
+on:
+  schedule:
+    - cron: "41 * * * *"   # cada hora; a las 5:41 (hora CDMX) se fija el parley del día
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: actualizar
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Descargar marcadores y momios de ESPN
+        run: python3 tools/update.py fresh 1 2
+      - name: Fijar parley y conservar momios
+        run: node tools/finalize.js fresh/days data/days out/days
+      - name: Guardar datos y armar la página
+        run: |
+          cp out/days/*.json data/days/
+          STANDALONE=1 node tools/build.js tools/page.html tools/model.js index.html data/days
+      - name: Subir cambios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html data/days
+          git diff --cached --quiet || (git commit -m "Actualizar datos" && git push)
