@@ -2,7 +2,9 @@ name: Actualizar marcadores y parley
 
 on:
   schedule:
-    - cron: "41 * * * *"   # cada hora; a las 5:41 (hora CDMX) se fija el parley del día
+    - cron: "41 * * * *"   # cada hora (GitHub a veces las retrasa)
+    - cron: "45,55 11 * * *"   # 5:45 y 5:55 a.m. CDMX: fijar el parley del día
+    - cron: "5,15,25 12 * * *" # respaldo si GitHub retrasa las anteriores
   workflow_dispatch:
 
 permissions:
