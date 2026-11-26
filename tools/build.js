@@ -15,7 +15,7 @@ for (const k of Object.keys(days)) {
   if (k < oldest || !/^202[56]-/.test(k)) { delete days[k]; continue; }
   if (k < cutoff) { // días viejos: solo los partidos del parley, para el historial
     const ids = new Set([...(d.parlay?.safe?.legs || []), ...(d.parlay?.value?.legs || [])].map((l) => l.gid));
-    days[k] = { date: d.date, updated: d.updated, parlay: d.parlay, games: (d.games || []).filter((g) => ids.has(g.id)) };
+    days[k] = { date: d.date, updated: d.updated, parlay: d.parlay, props: d.props, games: (d.games || []).filter((g) => ids.has(g.id)) };
   }
 }
 const data = JSON.stringify({ built: new Date().toISOString(), days }).replace(/</g, "\\u003c");

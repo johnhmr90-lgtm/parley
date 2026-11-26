@@ -70,6 +70,15 @@ input[type=date]{border:1px solid var(--line);background:var(--surface);border-r
 .chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:3px 8px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
 .chip.win{color:var(--win)} .chip.loss{color:var(--loss)} .chip.live{color:var(--live)} .chip.pending{color:var(--muted)} .chip.push{color:var(--push)}
 .prov{margin:12px 20px 0;padding:10px 12px;border:1px solid var(--live);border-radius:6px;font-size:13px;color:var(--fg);background:color-mix(in srgb,var(--live) 10%,transparent)}
+.props{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px 20px;display:grid;gap:14px}
+.props .pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.pcard{border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;gap:6px;background:var(--surface-2);min-width:0}
+.pcard .who{font-weight:600;font-size:15px}
+.pcard .meta{font-size:12px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pcard .nums{display:flex;gap:14px;font-size:12.5px;flex-wrap:wrap}
+.pcard .nums b{font-family:var(--f-mono)}
+.combo{border:1px dashed var(--ticket-line);background:var(--ticket);border-radius:8px;padding:12px 14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;font-size:14px}
+.combo .big{font-family:var(--f-display);font-weight:800;font-size:34px;color:var(--odds);line-height:1}
 .empty{padding:22px 20px;color:var(--muted);font-size:14px}
 .note{font-size:12px;color:var(--muted);max-width:70ch}
 
@@ -167,6 +176,12 @@ footer{font-size:12px;color:var(--muted);display:grid;gap:6px;border-top:1px sol
     </div>
   </section>
 
+  <section style="display:grid;gap:14px" aria-labelledby="propsTitle" id="propsSec" hidden>
+    <div class="bar"><h2 id="propsTitle" style="font-size:26px;text-transform:uppercase;font-weight:700">Props NFL</h2>
+      <div class="note">Jugadores que en la temporada promedian más que su línea de DraftKings</div></div>
+    <div class="props" id="props"></div>
+  </section>
+
   <section class="league-board" aria-labelledby="boardTitle" style="display:grid;gap:18px">
     <div class="bar">
       <h2 id="boardTitle">Marcadores y pronósticos</h2>
@@ -178,7 +193,7 @@ footer{font-size:12px;color:var(--muted);display:grid;gap:6px;border-top:1px sol
   <section style="display:grid;gap:14px" aria-labelledby="effTitle">
     <div class="bar"><h2 id="effTitle" style="font-size:26px;text-transform:uppercase;font-weight:700">Efectividad del parley</h2>
       <div class="controls">
-        <div class="seg" id="effKind" role="group" aria-label="Tipo de parley"><button type="button" data-v="safe">Del día</button><button type="button" data-v="value">De valor</button></div>
+        <div class="seg" id="effKind" role="group" aria-label="Tipo de parley"><button type="button" data-v="safe">Del día</button><button type="button" data-v="value">De valor</button><button type="button" data-v="props">Props NFL</button></div>
         <div class="seg" id="effRange" role="group" aria-label="Periodo"><button type="button" data-v="7">7 días</button><button type="button" data-v="30">30 días</button><button type="button" data-v="all">Todo</button></div>
       </div></div>
     <div class="eff" id="eff"></div>
@@ -376,6 +391,7 @@ function render(){
   const byId = Object.fromEntries(games.map(g => [g.id, g]));
   slip($("safeSlip"), S.day?.parlay?.safe, "safe", byId);
   slip($("valueSlip"), S.day?.parlay?.value, "value", byId);
+  renderProps(games);
   // Estado
   const anyLive = games.some(g => g.state === "in");
   $("dot").className = "dot" + (anyLive ? " on" : "");
@@ -402,6 +418,23 @@ function render(){
   }
   renderHistory();
 }
+function renderProps(games){
+  const pr = S.day?.props || S.emb?.days?.[S.date]?.props;
+  $("propsSec").hidden = !(pr && pr.picks && pr.picks.length);
+  if ($("propsSec").hidden) return;
+  const byId = Object.fromEntries(games.map(g => [g.id, g]));
+  const chipFor = (p) => p.result === "win" ? ["win", `Ganada · ${p.value}`] : p.result === "loss" ? ["loss", `Perdida · ${p.value}`] : byId[p.gid]?.state === "in" ? ["live", "En juego"] : ["pending", "Pendiente"];
+  // Combinada sugerida: la selección de partido de NFL más probable + la mejor prop de otro partido
+  const legs = games.filter(g => g.lg === "nfl" && g.state === "pre").flatMap(g => M.predict(g).legs).filter(l => l.dec >= 1.15 && l.dec <= 2.2).sort((a,b) => b.p - a.p);
+  const open = pr.picks.filter(p => !p.result && byId[p.gid]?.state !== "in" && byId[p.gid]?.state !== "post");
+  const leg = legs[0], prop = leg && (open.find(p => p.gid !== leg.gid) || open[0]);
+  const combo = leg && prop ? `<div class="combo"><div><div class="eyebrow">Combinada sugerida</div><div><b>${esc(leg.label)}</b> <span class="num" style="color:var(--odds)">${leg.dec.toFixed(2)}</span> + <b>${esc(prop.label)}</b> <span class="num" style="color:var(--odds)">≈${PROP_ODDS}</span></div></div><div style="text-align:right"><div class="big num">≈${(leg.dec*PROP_ODDS).toFixed(2)}</div><div class="note">momio aproximado</div></div></div>` : "";
+  $("props").innerHTML = `${!pr.locked ? `<div class="prov" style="margin:0"><b>Provisional.</b> Se fijan el día del partido a las 5:41 a.m. (hora CDMX) y pueden cambiar.</div>` : ""}${combo}
+  <div class="pgrid">${pr.picks.map(p => { const [c,t] = chipFor(p); return `<div class="pcard"><div class="who">${esc(p.label)}</div>
+    <div class="meta"><span>${esc(p.match)} · ${hhmm(p.start)}</span><span>${esc(p.pos || "")}</span><span class="chip ${c}">${esc(t)}</span></div>
+    <div class="nums"><span>Línea <b>${p.line}</b></span><span>Promedio <b>${p.avg}</b> (${p.gp} juegos)</span><span>Ventaja <b style="color:var(--win)">+${Math.round(p.edge*100)}%</b></span></div></div>`; }).join("")}</div>
+  <div class="note">ESPN no publica el momio de las props: se calcula con 1.87 (−115), el más común. Confírmalo en tu casa de apuestas. El análisis compara el promedio de la temporada con la línea; no considera rival ni clima, y descarta jugadores con lesión reportada.</div>`;
+}
 function renderHistory(){
   const rows = []; let n = 0, w = 0, units = 0;
   for (const d of S.history) {
@@ -417,9 +450,27 @@ function renderHistory(){
 
 /* ---------- Efectividad ---------- */
 S.effKind = store.get("effKind") || "safe"; S.effRange = store.get("effRange") || "30";
+const allDays = () => S.emb ? Object.values(S.emb.days) : S.history;
+const PROP_ODDS = 1.87;
+const propType = (l) => l.replace(/^.* más de [\d.]+ /, "");
+function effProps(from, today){
+  const days = [], leagues = {}; let w = 0, l = 0, units = 0, pending = 0;
+  const list = allDays().filter(d => d.date >= from && d.date <= today && d.props?.picks?.length).sort((a,b) => a.date.localeCompare(b.date));
+  for (const d of list) for (const p of d.props.picks) {
+    if (p.result !== "win" && p.result !== "loss") { pending++; continue; }
+    const won = p.result === "win"; won ? w++ : l++; units += won ? PROP_ODDS - 1 : -1;
+    const t = (leagues[propType(p.label)] ||= { w: 0, n: 0 }); t.n++; if (won) t.w++;
+    days.push({ date: d.date, won, dec: PROP_ODDS, rate: w / (w + l), legs: [p.label + ` (hizo ${p.value ?? 0})`] });
+  }
+  let streak = 0; for (let i = days.length - 1; i >= 0 && days[i].won === days[days.length-1].won; i--) streak++;
+  let best = 0, run = 0; days.forEach(x => { run = x.won ? run + 1 : 0; best = Math.max(best, run); });
+  const n = w + l;
+  return { days, w, l, n, units, avgOdds: n ? PROP_ODDS : null, streak, streakWon: days.length ? days[days.length-1].won : null, best, legW: w, legN: n, leagues, pending, props: true };
+}
 function effData(){
   const today = isoLocal(new Date());
   const from = S.effRange === "all" ? "0000" : addDays(today, -(+S.effRange - 1));
+  if (S.effKind === "props") return effProps(from, today);
   const list = S.history.filter(d => d.date >= from && d.date <= today && d.parlay?.[S.effKind]).sort((a,b) => a.date.localeCompare(b.date));
   const days = [], leagues = {}; let w = 0, l = 0, units = 0, oddsSum = 0, legW = 0, legN = 0, pending = 0;
   for (const d of list) {
@@ -440,7 +491,7 @@ function renderEff(){
   document.querySelectorAll("#effKind button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === S.effKind));
   document.querySelectorAll("#effRange button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === S.effRange));
   const D = effData(), el = $("eff");
-  const kindName = S.effKind === "safe" ? "parley del día" : "parley de valor";
+  const kindName = S.effKind === "safe" ? "parley del día" : S.effKind === "value" ? "parley de valor" : "prop de NFL";
   if (!D.n) {
     el.innerHTML = `<div class="empty" style="padding:6px 0">Todavía no hay ningún ${kindName} terminado en este periodo${D.pending ? ` (${D.pending} pendiente${D.pending>1?"s":""})` : ""}. Cada día que se resuelva el parley se suma aquí: porcentaje de aciertos y fallos, racha, unidades ganadas y aciertos por liga.</div>`;
     return;
@@ -452,16 +503,16 @@ function renderEff(){
     <div class="stat hero"><div class="eyebrow">Aciertos</div><div class="v" style="color:var(--win)">${pct(D.w/D.n)}</div>
       <div class="split" role="img" aria-label="${D.w} acertados y ${D.l} fallados"><i style="width:${D.w/D.n*100}%;background:var(--win)"></i><i style="width:${D.l/D.n*100}%;background:var(--loss)"></i></div>
       <div class="legend"><span><i class="sw" style="background:var(--win)"></i>✓ Acertados ${D.w}</span><span><i class="sw" style="background:var(--loss)"></i>✗ Fallados ${D.l} (${pct(D.l/D.n)})</span>${D.pending ? `<span>Pendientes ${D.pending}</span>` : ""}</div></div>
-    <div class="stat"><div class="v">${D.w}/${D.n}</div><div class="l">parleys acertados</div></div>
+    <div class="stat"><div class="v">${D.w}/${D.n}</div><div class="l">${D.props ? "props acertadas" : "parleys acertados"}</div></div>
     <div class="stat"><div class="v" style="color:${D.streakWon ? "var(--win)" : "var(--loss)"}">${streakTxt}</div><div class="l">racha actual · mejor ${D.best} ✓</div></div>
-    <div class="stat"><div class="v" style="color:${D.units >= 0 ? "var(--win)" : "var(--loss)"}">${D.units >= 0 ? "+" : ""}${D.units.toFixed(2)}</div><div class="l">unidades (1 por parley)</div></div>
+    <div class="stat"><div class="v" style="color:${D.units >= 0 ? "var(--win)" : "var(--loss)"}">${D.units >= 0 ? "+" : ""}${D.units.toFixed(2)}</div><div class="l">${D.props ? "unidades (1 por prop, momio aprox. 1.87)" : "unidades (1 por parley)"}</div></div>
     <div class="stat"><div class="v">${D.legN ? pct(D.legW/D.legN) : "—"}</div><div class="l">selecciones acertadas (${D.legW}/${D.legN})</div></div>
   </div>
   <div class="effgrid">
     <div style="display:grid;gap:6px;min-width:0"><div class="eyebrow">% de aciertos acumulado, día por día</div>
       <div class="chartbox" id="effChart"></div>
       <div class="legend"><span><i class="sw" style="background:var(--accent)"></i>% de aciertos acumulado</span>${be ? `<span><i class="sw" style="background:var(--muted);height:2px"></i>Punto de equilibrio ${pct(be)} (momio promedio ${D.avgOdds.toFixed(2)})</span>` : ""}<span>✓ / ✗ resultado de cada día</span></div></div>
-    <div style="display:grid;gap:10px;align-content:start"><div class="eyebrow">Selecciones acertadas por liga</div>
+    <div style="display:grid;gap:10px;align-content:start"><div class="eyebrow">${D.props ? "Aciertos por tipo de prop" : "Selecciones acertadas por liga"}</div>
       ${Object.entries(D.leagues).sort((a,b) => b[1].n - a[1].n).map(([k,t]) => `<div class="lgrow"><span>${esc(L[k]?.name || k)}</span><div class="lgbar"><i style="width:${t.w/t.n*100}%"></i></div><span class="num">${t.w}/${t.n} · ${pct(t.w/t.n)}</span></div>`).join("")}
     </div>
   </div>`;

@@ -26,6 +26,7 @@ jobs:
       - name: Guardar datos y armar la página
         run: |
           cp out/days/*.json data/days/
+          python3 tools/props.py data/days || echo "props no disponibles en esta corrida"
           STANDALONE=1 node tools/build.js tools/page.html tools/model.js index.html data/days
       - name: Subir cambios
         run: |

@@ -34,6 +34,7 @@ for (const f of fs.readdirSync(fresh).filter((f) => f.endsWith(".json")).sort())
     delete parlay.candidates;
   }
   const doc = { date: day, updated: cur.updated, games, parlay };
+  if (old?.props) doc.props = old.props; // props de NFL (las maneja props.py)
   fs.writeFileSync(path.join(out, f), JSON.stringify(doc));
   const s = parlay.safe;
   console.log(day, games.length, "partidos |", s ? `parley ${s.dec} p=${s.p} ${parlay.locked ? "(fijo)" : "(provisional)"}: ` + s.legs.map((l) => l.label + " " + l.dec).join(" + ") : "sin parley");
